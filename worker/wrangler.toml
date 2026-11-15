@@ -1,0 +1,13 @@
+name = "snap-queue-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+WEBHOOK_URL = "https://signal.openbot.run/v1/webhooks/0d97ad48-2b78-47aa-82f6-70e099b368d3"
+ALLOWED_ORIGIN = "*"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "snap-queue"
+
+# Tokens live in R2 config/secrets.json: the app token and webhook secret from the app, the agent token claimed once by Snap Boy.

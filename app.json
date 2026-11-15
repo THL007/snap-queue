@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Snap Queue",
+    "slug": "snap-queue",
+    "version": "1.0.0",
+    "scheme": "snapqueue",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": { "bundleIdentifier": "com.thl007.snapqueue", "supportsTablet": true },
+    "android": { "package": "com.thl007.snapqueue", "adaptiveIcon": { "foregroundImage": "./assets/icon.png", "backgroundColor": "#f2d64b" } },
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "name": "Snap Queue",
+      "shortName": "Snap Queue",
+      "themeColor": "#f7f4ec",
+      "backgroundColor": "#f7f4ec"
+    },
+    "experiments": {
+      "baseUrl": "/snap-queue",
+      "typedRoutes": false
+    },
+    "plugins": ["expo-router"]
+  }
+}

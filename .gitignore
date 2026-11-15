@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.expo/
+work/
+worker/.env
+*.log
+.DS_Store
+.hallmark/shots/
+android/
+ios/
