@@ -6,6 +6,9 @@ import {
   ago, api, ApiError, chatTone, Contact, Doc, getSettings, Lane, LANES, laneOf, saveSettings, Settings, sortQueue, Stage, STAGES, stageLabel, Status,
 } from "../lib/api";
 import { demoDoc } from "../lib/demo";
+import { Icon, IconName } from "./Icon";
+
+const LANE_ICON: Record<Lane, IconName> = { yours: "reply", waiting: "hourglass", plans: "calendar", parked: "pause", all: "list" };
 
 type Props = { dom?: import("expo/dom").DOMProps };
 
@@ -175,9 +178,10 @@ export default function SnapQueue(_: Props) {
           {demo ? <span className="demo-flag">Example data</span> : null}
           <SyncLine doc={doc} />
           <div className="bar-actions">
-            <button className="btn btn--quiet" type="button" onClick={() => setSheet("add")}><span className="wide">Add by hand</span><span className="narrow">Add</span></button>
-            <button className="btn btn--quiet" type="button" onClick={() => setSheet("settings")}>Settings</button>
+            <button className="btn btn--quiet" type="button" onClick={() => setSheet("add")}><Icon name="plus" /><span className="wide">Add by hand</span><span className="narrow">Add</span></button>
+            <button className="btn btn--quiet" type="button" onClick={() => setSheet("settings")} aria-label="Settings"><Icon name="sliders" /><span className="wide">Settings</span></button>
             <button className="btn btn--primary" type="button" onClick={sync} aria-busy={busy === "sync" || doc?.sync.state === "requested"} disabled={busy === "sync"}>
+              <span className="spin" data-on={doc?.sync.state === "requested" || busy === "sync"}><Icon name="sync" /></span>
               {doc?.sync.state === "requested" ? "Syncing" : <><span className="wide">Sync from Snapchat</span><span className="narrow">Sync</span></>}
             </button>
           </div>
@@ -189,30 +193,33 @@ export default function SnapQueue(_: Props) {
           <div className="lanes" role="tablist" aria-label="Queue lanes">
             {LANES.map((l) => (
               <button key={l.id} role="tab" type="button" className="lane" aria-selected={lane === l.id} onClick={() => setLane(l.id)}>
-                {l.label} <span className="count">{doc ? counts[l.id] : ""}</span>
+                <Icon name={LANE_ICON[l.id]} />{l.label} <span className="count">{doc ? counts[l.id] : ""}</span>
               </button>
             ))}
           </div>
-          <input className="input search" type="search" placeholder="Find a name or next step" aria-label="Find a name or next step" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <label className="search">
+            <Icon name="search" />
+            <input className="input" type="search" placeholder="Find a name or next step" aria-label="Find a name or next step" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </label>
         </div>
 
         <div className="layout" data-open={Boolean(current)}>
           <section aria-label="Chats">
             {loadError && !doc ? (
               <div className="notice" data-kind="error" role="alert">
-                <h2>The queue didn't load</h2>
+                <h2><Icon name="alert" />The queue didn't load</h2>
                 <p>{loadError}</p>
-                <button className="btn" type="button" onClick={load}>Try again</button>
+                <button className="btn" type="button" onClick={load}><Icon name="sync" />Try again</button>
               </div>
             ) : !doc ? (
               <Skeleton />
             ) : contacts.length === 0 ? (
               <div className="notice">
-                <h2>No chats yet</h2>
+                <h2><Icon name="inbox" />No chats yet</h2>
                 <p>Sync and Snap Boy reads your Snapchat chat list: names, who sent last and when. It never opens a chat or sends anything.</p>
                 <div className="row-actions">
-                  <button className="btn btn--primary" type="button" onClick={sync} disabled={busy === "sync"}>Sync from Snapchat</button>
-                  <button className="btn" type="button" onClick={() => setSheet("add")}>Add by hand</button>
+                  <button className="btn btn--primary" type="button" onClick={sync} disabled={busy === "sync"}><Icon name="sync" />Sync from Snapchat</button>
+                  <button className="btn" type="button" onClick={() => setSheet("add")}><Icon name="plus" />Add by hand</button>
                 </div>
               </div>
             ) : visible.length === 0 ? (
@@ -226,15 +233,15 @@ export default function SnapQueue(_: Props) {
                   <li key={c.id}>
                     <button type="button" className="row" aria-current={open === c.id} data-unread={c.unread} onClick={() => setOpen(open === c.id ? "" : c.id)}>
                       <span className="who">
-                        <span className="name">{c.pinned ? "Pinned: " : ""}{c.name}</span>
-                        <span className="next">{c.nextStep || stageLabel(c.stage)}</span>
+                        <span className="name">{c.pinned ? <Icon name="pin" label="Pinned" /> : null}<span className="txt">{c.name}</span></span>
+                        <span className="next">{c.nextStep ? <Icon name="arrow" /> : <Icon name="flag" />}<span className="txt">{c.nextStep || stageLabel(c.stage)}</span></span>
                       </span>
                       <span className="chatstate">
-                        <span className="chip" data-tone={chatTone(c)}>{chatText(c)}</span>
+                        <span className="chip" data-tone={chatTone(c)}><ChatIcon c={c} />{chatText(c)}</span>
                         <span className="stage">{c.nextStep ? stageLabel(c.stage) : ""}</span>
                       </span>
-                      <span className="ago ago-cell">{c.chat.ago ? `${c.chat.ago} ago` : ago(c.lastAt || c.updatedAt)}</span>
-                      <span className="streak" aria-label={c.streak ? `Streak ${c.streak} days` : undefined}>{c.streak ? `${c.streak}d streak` : ""}</span>
+                      <span className="ago ago-cell"><Icon name="clock" />{c.chat.ago ? `${c.chat.ago} ago` : ago(c.lastAt || c.updatedAt)}</span>
+                      <span className="streak" aria-label={c.streak ? `Streak ${c.streak} days` : undefined}>{c.streak ? <><Icon name="flame" />{c.streak}d</> : ""}</span>
                     </button>
                   </li>
                 ))}
@@ -261,12 +268,27 @@ export default function SnapQueue(_: Props) {
 
       {toast ? (
         <div className="toast" role="status">
-          <span>{toast.text}</span>
-          {toast.undo ? <button className="btn" type="button" onClick={() => { toast.undo?.(); setToast(null); }}>Undo</button> : <button className="btn btn--quiet" style={{ color: "inherit" }} type="button" onClick={() => setToast(null)}>Close</button>}
+          <span className="toast-text"><Icon name={toast.undo ? "trash" : "check"} />{toast.text}</span>
+          {toast.undo ? <button className="btn" type="button" onClick={() => { toast.undo?.(); setToast(null); }}><Icon name="undo" />Undo</button> : <button className="btn btn--quiet" style={{ color: "inherit" }} type="button" onClick={() => setToast(null)} aria-label="Close"><Icon name="x" /></button>}
         </div>
       ) : null}
     </div>
   );
+}
+
+function ChatIcon({ c }: { c: Contact }) {
+  if (c.stage === "stopped" || c.stage === "paused") return <Icon name="pause" />;
+  if (c.chat.who === "me") return <Icon name="send" />;
+  const name: IconName = c.chat.kind === "snap" ? "snap" : c.chat.kind === "call" ? "call" : "chat";
+  return <Icon name={name} filled={c.chat.who === "them" && (c.unread || c.chat.state === "new" || c.chat.state === "received")} />;
+}
+
+function historyIcon(text: string): IconName {
+  if (text.startsWith("Stage:")) return "flag";
+  if (text.startsWith("Snap Boy")) return "sparkle";
+  if (text.startsWith("Found")) return "search";
+  if (text.startsWith("Added")) return "plus";
+  return /snap/i.test(text) ? "snap" : "chat";
 }
 
 function chatText(c: Contact) {
@@ -340,13 +362,13 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
       <div className="panel-head">
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 ref={headRef} tabIndex={-1}>{c.name}</h2>
-          <p className="panel-sub">{chatText(c)}{c.chat.ago ? `, ${c.chat.ago} ago` : ""}{c.streak ? `, ${c.streak} day streak` : ""}</p>
+          <p className="panel-sub"><ChatIcon c={c} />{chatText(c)}{c.chat.ago ? `, ${c.chat.ago} ago` : ""}{c.streak ? `, ${c.streak} day streak` : ""}</p>
         </div>
-        <button className="btn btn--quiet" type="button" onClick={onClose}>Close</button>
+        <button className="btn btn--quiet btn--icon" type="button" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
       </div>
 
       <div className="section">
-        <h3>Status</h3>
+        <h3><Icon name="flag" />Status</h3>
         <div className="ladder" role="group" aria-label="Stage">
           {STAGES.map((s) => (
             <button key={s.id} type="button" className="pill" data-stop={s.id === "stopped"} aria-pressed={c.stage === s.id} onClick={() => onPatch({ stage: s.id })}>{s.label}</button>
@@ -357,18 +379,18 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
 
       <div className="section">
         <div className="field">
-          <label htmlFor="next">Next step</label>
+          <label htmlFor="next"><Icon name="arrow" />Next step</label>
           <input id="next" className="input" value={nextStep} maxLength={200} placeholder="What you'll do next" onChange={(e) => setNextStep(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="note">Notes</label>
+          <label htmlFor="note"><Icon name="pencil" />Notes</label>
           <textarea id="note" className="textarea" value={note} maxLength={1000} placeholder="Interests, plans, things to remember" onChange={(e) => setNote(e.target.value)} />
         </div>
-        <span className="saved" data-on={saved} aria-live="polite">{saved ? "Saved" : ""}</span>
+        <span className="saved" data-on={saved} aria-live="polite">{saved ? <><Icon name="check" />Saved</> : ""}</span>
       </div>
 
       <div className="section">
-        <h3>Reply drafts</h3>
+        <h3><Icon name="sparkle" />Reply drafts</h3>
         {stopped ? (
           <p className="hint">Off for stopped contacts.</p>
         ) : (
@@ -379,18 +401,19 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
             </div>
             <div className="row-actions">
               <button className="btn btn--primary" type="button" onClick={() => onDrafts(goal)} disabled={busy || c.drafts.state === "requested"} aria-busy={busy || c.drafts.state === "requested"}>
+                <Icon name="sparkle" />
                 {c.drafts.state === "requested" ? "Snap Boy is reading the chat" : c.drafts.items.length ? "New drafts" : "Get drafts"}
               </button>
             </div>
             <p className="hint">Snap Boy opens only this chat in Snapchat Web, reads it, closes it and drafts. You send.</p>
-            {c.drafts.state === "failed" ? <p className="hint hint--error" role="alert">Drafts failed: {c.drafts.read || "no reason given"}</p> : null}
+            {c.drafts.state === "failed" ? <p className="hint hint--error" role="alert"><Icon name="alert" />Drafts failed: {c.drafts.read || "no reason given"}</p> : null}
             {c.drafts.state !== "failed" && c.drafts.read ? <p><span className="read">{c.drafts.read}</span></p> : null}
             {c.drafts.items.length ? (
               <ul className="drafts">
                 {c.drafts.items.map((d, i) => (
                   <li key={i} className="draft" data-pick={d.pick}>
                     <p>{d.text}<span className="angle">{d.pick ? `${d.angle || "draft"}, Snap Boy's pick` : d.angle}</span></p>
-                    <button className="btn" type="button" onClick={() => copy(d.text)}>Copy</button>
+                    <button className="btn" type="button" onClick={() => copy(d.text)}><Icon name="copy" />Copy</button>
                   </li>
                 ))}
               </ul>
@@ -400,17 +423,17 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
       </div>
 
       <div className="section">
-        <h3>History</h3>
+        <h3><Icon name="clock" />History</h3>
         <ol className="history">
           {c.history.slice(0, 12).map((h, i) => (
-            <li key={i}><time dateTime={h.at}>{ago(h.at)}</time><span>{h.text}</span></li>
+            <li key={i}><time dateTime={h.at}>{ago(h.at)}</time><span><Icon name={historyIcon(h.text)} />{h.text}</span></li>
           ))}
         </ol>
       </div>
 
       <div className="row-actions">
-        <button className="btn" type="button" onClick={() => onPatch({ pinned: !c.pinned })}>{c.pinned ? "Unpin" : "Pin to top"}</button>
-        <button className="btn btn--quiet btn--danger" type="button" onClick={onRemove}>Remove from queue</button>
+        <button className="btn" type="button" onClick={() => onPatch({ pinned: !c.pinned })}><Icon name="pin" />{c.pinned ? "Unpin" : "Pin to top"}</button>
+        <button className="btn btn--quiet btn--danger" type="button" onClick={onRemove}><Icon name="trash" />Remove from queue</button>
       </div>
     </aside>
   );
@@ -447,7 +470,7 @@ function AddForm({ onAdd, onCancel }: { onAdd: (name: string, stage: Stage) => P
       try { await onAdd(name.trim(), stage); } catch (err) { setError(err instanceof Error ? err.message : "Not added."); } finally { setBusy(false); }
     }}>
       <div className="field">
-        <label htmlFor="add-name">Name as it shows in Snapchat</label>
+        <label htmlFor="add-name"><Icon name="chat" />Name as it shows in Snapchat</label>
         <input id="add-name" className="input" value={name} maxLength={80} aria-invalid={Boolean(error)} onChange={(e) => { setName(e.target.value); setError(""); }} />
         {error ? <span className="hint hint--error" role="alert">{error}</span> : null}
       </div>
@@ -461,7 +484,7 @@ function AddForm({ onAdd, onCancel }: { onAdd: (name: string, stage: Stage) => P
       </div>
       <div className="row-actions">
         <button className="btn btn--quiet" type="button" onClick={onCancel}>Cancel</button>
-        <button className="btn btn--primary" type="submit" disabled={busy} aria-busy={busy}>Add to queue</button>
+        <button className="btn btn--primary" type="submit" disabled={busy} aria-busy={busy}><Icon name="plus" />Add to queue</button>
       </div>
     </form>
   );
@@ -508,12 +531,12 @@ function SettingsForm({ settings, status, first, demo, onSaved, onSignOut }: {
       {demo ? <p className="hint">You're looking at example data. Remove ?demo=1 from the address to use your own.</p> : null}
       <form className="section" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="token">{firstRun ? "New access token, 12 or more characters" : "Access token"}</label>
+          <label htmlFor="token"><Icon name="key" />{firstRun ? "New access token, 12 or more characters" : "Access token"}</label>
           <input id="token" className="input" name="password" type="password" autoComplete={firstRun ? "new-password" : "current-password"} value={token} aria-invalid={Boolean(error)} onChange={(e) => setToken(e.target.value)} />
         </div>
         {firstRun || needsSecret || !first ? (
           <div className="field">
-            <label htmlFor="secret">Webhook signing secret{status?.webhook ? " (set, paste only to change it)" : ""}</label>
+            <label htmlFor="secret"><Icon name="sync" />Webhook signing secret{status?.webhook ? " (set, paste only to change it)" : ""}</label>
             <input id="secret" className="input" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />
             <span className="hint">From OpenBot, Routines, "Snap Queue: sync chats and draft replies". It links Sync to Snap Boy.</span>
           </div>
@@ -526,7 +549,7 @@ function SettingsForm({ settings, status, first, demo, onSaved, onSignOut }: {
           </div>
         </details>
         {error ? <p className="hint hint--error" role="alert">{error}</p> : null}
-        {status ? <p className="hint">Snap Boy link: {status.webhook ? "connected" : "needs the signing secret"}.</p> : null}
+        {status ? <p className="hint"><Icon name={status.webhook ? "check" : "alert"} />Snap Boy link: {status.webhook ? "connected" : "needs the signing secret"}.</p> : null}
         <div className="row-actions">
           {onSignOut && settings.token ? <button className="btn btn--quiet" type="button" onClick={onSignOut}>Sign out</button> : null}
           <button className="btn btn--primary" type="submit" disabled={busy} aria-busy={busy}>{first ? (firstRun ? "Create and open" : "Open the queue") : "Save"}</button>

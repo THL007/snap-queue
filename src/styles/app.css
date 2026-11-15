@@ -4,6 +4,7 @@
 /* Hallmark · pre-emit critique: P4 H3 E4 S4 R4 V3 · weakest: V, the paper grain is the only texture; kept it to the ground and the rows so data stays crisp */
 /* waive 39b: queue rows are list items holding two lines of text, not controls; their buttons inside the panel stay 40px */
 /* dismissed F4: .btn is the theme's secondary card stock, .btn--primary the one pear primary */
+/* answered: icons added at the user's request over Hum's "no stock icons": one custom stroke set in ink, inline, no coins, no emoji */
 /* answered: torn edges skipped on an app screen, the theme's material carried by grain, card stock and the press */
 @import url("./fonts.css");
 @import url("./tokens.css");
@@ -64,7 +65,6 @@ body { background: var(--grain), var(--fibre), var(--color-paper); font-weight: 
 .lane:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .lane[aria-selected="true"] { background: var(--color-ink); color: var(--color-paper); }
 .lane .count { font-variant-numeric: tabular-nums; font-weight: 500; opacity: 0.8; }
-.search { margin-inline-start: auto; width: min(260px, 100%); }
 
 /* ---- the queue (signature) */
 .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
@@ -165,3 +165,31 @@ body { background: var(--grain), var(--fibre), var(--color-paper); font-weight: 
 /* the panel name takes focus when the panel opens, for screen readers; no ring on that programmatic focus */
 .panel-head h2:focus:not(:focus-visible), .panel-head h2[tabindex="-1"]:focus { outline: none; }
 .panel-sub { margin-top: var(--space-2xs); }
+
+/* ---- icons: one custom set (Icon.tsx), 2px round strokes in currentColor, inline beside their words, never in a coin */
+.icon { width: 1.15em; height: 1.15em; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.2em; }
+.icon[data-fill="true"] { fill: currentColor; }
+.btn .icon { width: 18px; height: 18px; }
+.btn--icon { min-width: var(--control-h); padding: 0; }
+.spin { display: inline-flex; }
+@media (prefers-reduced-motion: no-preference) { .spin[data-on="true"] .icon { animation: spin 1.1s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.lane .icon { width: 16px; height: 16px; align-self: center; }
+.search { position: relative; display: block; margin-inline-start: auto; width: min(260px, 100%); }
+.search .icon { position: absolute; inset-inline-start: var(--space-sm); top: 50%; translate: 0 -50%; color: var(--color-muted); pointer-events: none; }
+.search .input { padding-inline-start: calc(var(--space-sm) + 26px); }
+.who .name, .who .next, .ago, .streak, .panel-sub, .field label, .hint, .saved, .toast-text, .history li > span, .notice h2, .section h3 { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+.section h3, .notice h2 { gap: var(--space-xs); }
+.who .name .icon { color: var(--color-ink-2); }
+.who .next .icon, .ago .icon, .history .icon, .field label .icon, .hint .icon { width: 14px; height: 14px; }
+.who .next .icon, .ago .icon, .history .icon { color: var(--color-muted); }
+.chip { gap: var(--space-2xs); }
+.chip .icon { width: 14px; height: 14px; }
+.streak { justify-content: flex-end; }
+.streak .icon { width: 15px; height: 15px; color: color-mix(in oklab, var(--color-accent-3) 65%, var(--color-ink)); }
+.panel-sub .icon { width: 14px; height: 14px; }
+.toast-text .icon { width: 16px; height: 16px; }
+.hint--error .icon { color: var(--color-error); }
+.who .name, .who .next { display: flex; min-width: 0; }
+.who .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 60rem) { .search { width: 100%; margin-inline-start: 0; } }
