@@ -1,5 +1,5 @@
 /* Hallmark · shape: app screen · genre: playful · theme: Hum (deal 3/3, seed snap-queue-dashboard-all-ecea·0364873a·2026-11-15·r0)
- * nav: top bar with the wordmark, sync state and two actions · signature: the queue, every chat sorted by whose move it is, as card-stock rows · states: loading, empty, error, full, sync requested, sync failed, drafts requested, drafts ready
+ * nav: top bar with the wordmark, sync state and two actions · signature: the queue, every chat sorted by whose move it is, as one sheet of rows split by hairline dividers · states: loading, empty, error, full, sync requested, sync failed, drafts requested, drafts ready
  * axes: light/rounded-sans/chromatic-yellow · posture: full-palette · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H3 E4 S4 R4 V3 · weakest: V, the paper grain is the only texture; kept it to the ground and the rows so data stays crisp */
 /* waive 39b: queue rows are list items holding two lines of text, not controls; their buttons inside the panel stay 40px */
@@ -13,7 +13,6 @@
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.26 0 0 0 0 0.18 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --fibre: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='turbulence' baseFrequency='.004 .06' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 .96 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   --bar-h: 64px;
-  --row-gap: 10px;
   --control-h: 40px;
 }
 
@@ -70,12 +69,13 @@ body { background: var(--grain), var(--fibre), var(--color-paper); font-weight: 
 /* ---- the queue (signature) */
 .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); align-items: start; }
 .layout[data-open="true"] { grid-template-columns: minmax(0, 1fr) minmax(0, 420px); }
-.queue { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--row-gap); }
-.row { --edge: 3px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) auto auto; align-items: center; gap: var(--space-md); width: 100%; text-align: start; min-height: 64px; padding: var(--space-sm) var(--space-md); border: 0; border-radius: var(--radius-stock); background: var(--grain), var(--color-card); color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-rule), 0 var(--edge) 0 0 var(--color-edge); cursor: pointer; transition: translate var(--dur-micro) var(--ease-snap), box-shadow var(--dur-micro) var(--ease-snap); margin-bottom: var(--space-2xs); }
-.row:hover { --edge: 5px; translate: 0 -2px; }
-.row:active { --edge: 1px; translate: 0 2px; }
-.row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
-.row[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--color-ink), 0 var(--edge) 0 0 var(--color-ink-2); }
+.queue { list-style: none; margin: 0; padding: 0; display: grid; border-radius: var(--radius-card); background: var(--grain), var(--color-card); box-shadow: inset 0 0 0 1px var(--color-rule); overflow: clip; }
+.queue > li + li { border-top: var(--rule-hair) solid var(--color-rule); }
+.row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) auto auto; align-items: center; gap: var(--space-md); width: 100%; text-align: start; min-height: 64px; padding: var(--space-sm) var(--space-lg); border: 0; border-radius: 0; background: transparent; color: var(--color-ink); cursor: pointer; transition: background-color var(--dur-micro) var(--ease-snap); }
+.row:hover { background: var(--color-paper-2); }
+.row:active { background: var(--color-paper-3); }
+.row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.row[aria-current="true"] { background: color-mix(in oklab, var(--color-accent) 30%, var(--color-card)); box-shadow: inset 4px 0 0 var(--color-ink); }
 .row[data-unread="true"] .who { font-weight: 600; }
 .who { display: grid; gap: 0; min-width: 0; }
 .who .name { font-size: var(--text-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,0 +1,26 @@
+[
+ {
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "hum",
+  "axes": "light/rounded-sans/chromatic-yellow",
+  "hero": "none",
+  "nav": "top bar",
+  "footer": "none",
+  "imagery": "none",
+  "photos": [],
+  "entry": "none",
+  "fingerprint": "queue-rows-cardstock",
+  "sections": [
+   "queue",
+   "detail panel"
+  ],
+  "signature": "the queue sorted by whose move it is",
+  "waived": [
+   "39b"
+  ],
+  "prompt": "Snap Queue: overview of all Snapchat chats with contact status",
+  "date": "2026-11-15",
+  "mode": "build"
+ }
+]
