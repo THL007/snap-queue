@@ -193,3 +193,28 @@ body { background: var(--grain), var(--fibre), var(--color-paper); font-weight: 
 .who .name, .who .next { display: flex; min-width: 0; }
 .who .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 60rem) { .search { width: 100%; margin-inline-start: 0; } }
+
+/* ---- friend status: filter pills, the added-you-back banner, the mark beside a name */
+.friends { display: flex; flex-wrap: wrap; gap: var(--space-2xs); margin-bottom: var(--space-md); }
+.friends .pill, .panel .ladder .pill { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+.friends .pill .icon, .ladder .pill .icon { width: 15px; height: 15px; }
+.friends .count { font-variant-numeric: tabular-nums; font-weight: 500; opacity: 0.8; margin-inline-start: var(--space-3xs); }
+.addback { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--grain), color-mix(in oklab, var(--color-mint) 45%, var(--color-card)); color: var(--color-ink); }
+.addback > .icon { color: var(--color-mint-deep); }
+.addback-text { font-weight: 600; }
+.addback-name { display: inline-flex; align-items: baseline; gap: var(--space-2xs); min-height: 32px; padding: 0 var(--space-sm); border: 0; border-radius: var(--radius-pill); background: var(--color-card); color: var(--color-ink); font-weight: 600; font-size: var(--text-sm); cursor: pointer; box-shadow: inset 0 0 0 1px var(--color-rule); transition: background-color var(--dur-micro) var(--ease-snap); align-items: center; position: relative; }
+.addback-name::after { content: ""; position: absolute; inset: -6px 0; }
+.addback-name:hover { background: var(--color-paper-2); }
+.addback-name:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.addback-name .ago { font-weight: 500; font-size: var(--text-xs); }
+.fmark { display: inline-flex; align-items: center; gap: var(--space-3xs); margin-inline-start: var(--space-xs); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.fmark .icon { width: 15px; height: 15px; }
+.fmark[data-f="mutual"] { color: var(--color-mint-deep); }
+.fmark[data-f="new"] { color: var(--color-ink); background: color-mix(in oklab, var(--color-mint) 55%, transparent); padding: 0 var(--space-xs); border-radius: var(--radius-pill); }
+.fmark[data-f="new"] .icon { color: var(--color-mint-deep); }
+.fmark[data-f="pending"] { color: var(--color-muted); }
+.fmark[data-f="added-me"] { color: var(--color-accent-2); }
+@media (max-width: 40rem) {
+  .fmark .fm-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .fmark[data-f="new"] { padding: 0 var(--space-2xs); }
+}

@@ -26,6 +26,6 @@ if (cmd === "sync") out = await call("PUT", "/api/agent/sync", readJson(a));
 else if (cmd === "drafts") out = await call("PUT", `/api/agent/drafts/${a}`, readJson(b));
 else if (cmd === "fail-sync") out = await call("PUT", "/api/agent/sync", { ok: false, error: a || "failed" });
 else if (cmd === "fail-drafts") out = await call("PUT", `/api/agent/drafts/${a}`, { ok: false, error: b || "failed" });
-else if (cmd === "list") { const d = await call("GET", "/api/contacts"); out = { sync: d.sync, contacts: d.contacts.map((c) => ({ id: c.id, name: c.name, stage: c.stage, chat: c.chat.label })) }; }
+else if (cmd === "list") { const d = await call("GET", "/api/contacts"); out = { sync: d.sync, contacts: d.contacts.map((c) => ({ id: c.id, name: c.name, stage: c.stage, friend: c.friend || "", chat: c.chat.label })) }; }
 else { console.error("usage: sync <file> | drafts <id> <file> | fail-sync <reason> | fail-drafts <id> <reason> | list"); process.exit(2); }
 console.log(JSON.stringify(out, null, 2));

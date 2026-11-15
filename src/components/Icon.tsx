@@ -29,6 +29,10 @@ const P: Record<string, string> = {
   key: "M8 11a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM11 12l9-9M16.5 6.5l3 3",
   undo: "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
   alert: "M12 3 2 20h20L12 3zM12 10v4M12 17h.01",
+  userCheck: "M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM2 21a7 7 0 0 1 12-4.9M15.5 18l2 2 4.5-4.5",
+  userClock: "M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM2 21a7 7 0 0 1 10.5-6M18 13a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM18 15.5V17l1.2.8",
+  userPlus: "M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM2 21a7 7 0 0 1 12-4.9M19 14v6M16 17h6",
+  user: "M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM2 21a7 7 0 0 1 14 0",
   inbox: "M4 13l2.5-8h11L20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6zM4 13h5l1 3h4l1-3h5",
 };
 export type IconName = keyof typeof P;

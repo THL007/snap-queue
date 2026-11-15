@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ago, api, ApiError, chatTone, Contact, Doc, getSettings, Lane, LANES, laneOf, saveSettings, Settings, sortQueue, Stage, STAGES, stageLabel, Status,
 } from "../lib/api";
+import { FRIENDS, Friend, FriendFilter, friendMatch, isNewAddBack } from "../lib/api";
 import { demoDoc } from "../lib/demo";
 import { Icon, IconName } from "./Icon";
 
@@ -14,16 +15,19 @@ type Props = { dom?: import("expo/dom").DOMProps };
 
 // ---- URL state (lane, open contact, demo)
 function readUrl() {
-  if (typeof window === "undefined") return { lane: "yours" as Lane, open: "", demo: false };
+  if (typeof window === "undefined") return { lane: "yours" as Lane, open: "", demo: false, friend: "any" as FriendFilter };
   const q = new URLSearchParams(window.location.search);
   const lane = (LANES.find((l) => l.id === q.get("lane"))?.id || "yours") as Lane;
-  return { lane, open: q.get("c") || "", demo: q.get("demo") === "1" };
+  const f = q.get("f");
+  const friend = (f === "back" || f === "mutual" || f === "pending" || f === "added-me" ? f : "any") as FriendFilter;
+  return { lane, open: q.get("c") || "", demo: q.get("demo") === "1", friend };
 }
-function writeUrl(lane: Lane, open: string, demo: boolean) {
+function writeUrl(lane: Lane, open: string, demo: boolean, friend: FriendFilter) {
   if (typeof window === "undefined") return;
   const q = new URLSearchParams();
   if (demo) q.set("demo", "1");
   if (lane !== "yours") q.set("lane", lane);
+  if (friend !== "any") q.set("f", friend);
   if (open) q.set("c", open);
   const s = q.toString();
   window.history.replaceState(null, "", `${window.location.pathname}${s ? `?${s}` : ""}`);
@@ -39,11 +43,12 @@ export default function SnapQueue(_: Props) {
   const [lane, setLane] = useState<Lane>(initial.lane);
   const [open, setOpen] = useState(initial.open);
   const [query, setQuery] = useState("");
+  const [friendFilter, setFriendFilter] = useState<FriendFilter>(initial.friend);
   const [sheet, setSheet] = useState<"" | "settings" | "add">("");
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const [busy, setBusy] = useState("");
 
-  useEffect(() => writeUrl(lane, open, demo), [lane, open, demo]);
+  useEffect(() => writeUrl(lane, open, demo, friendFilter), [lane, open, demo, friendFilter]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), toast.undo ? 7000 : 3500);
@@ -87,8 +92,12 @@ export default function SnapQueue(_: Props) {
 
   // ---- mutations (local in demo mode)
   const replace = (c: Contact) => setDoc((d) => (d ? { ...d, contacts: d.contacts.map((x) => (x.id === c.id ? c : x)) } : d));
-  async function patch(c: Contact, body: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned">>) {
+  async function patch(c: Contact, body: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned" | "friend">>) {
     const local = { ...c, ...body, updatedAt: new Date().toISOString() };
+    if (body.friend && body.friend !== c.friend) {
+      if (body.friend === "mutual" && c.friend === "pending") local.addedBackAt = local.updatedAt;
+      local.history = [{ at: local.updatedAt, text: friendHistory(body.friend, c.friend || "") }, ...c.history];
+    }
     if (body.stage && body.stage !== c.stage) local.history = [{ at: local.updatedAt, text: `Stage: ${body.stage}` }, ...c.history];
     replace(local);
     if (demo) return true;
@@ -153,11 +162,17 @@ export default function SnapQueue(_: Props) {
     for (const c of contacts) n[laneOf(c)]++;
     return n;
   }, [contacts]);
+  const friendCounts = useMemo(() => {
+    const n: Record<FriendFilter, number> = { any: contacts.length, back: 0, mutual: 0, pending: 0, "added-me": 0 };
+    for (const c of contacts) for (const f of ["back", "mutual", "pending", "added-me"] as FriendFilter[]) if (friendMatch(c, f)) n[f]++;
+    return n;
+  }, [contacts]);
+  const newBacks = useMemo(() => sortQueue(contacts.filter(isNewAddBack)), [contacts]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = contacts.filter((c) => (lane === "all" || laneOf(c) === lane) && (!q || c.name.toLowerCase().includes(q) || c.nextStep.toLowerCase().includes(q)));
+    const list = contacts.filter((c) => (lane === "all" || laneOf(c) === lane) && friendMatch(c, friendFilter) && (!q || c.name.toLowerCase().includes(q) || c.nextStep.toLowerCase().includes(q)));
     return sortQueue(list);
-  }, [contacts, lane, query]);
+  }, [contacts, lane, query, friendFilter]);
   const current = contacts.find((c) => c.id === open) || null;
 
   if (!signedIn) {
@@ -202,6 +217,22 @@ export default function SnapQueue(_: Props) {
             <input className="input" type="search" placeholder="Find a name or next step" aria-label="Find a name or next step" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
         </div>
+        <div className="friends" role="group" aria-label="Friend status">
+          {([["any", "Anyone", "user"], ["back", "Added you back", "userCheck"], ["pending", "Pending", "userClock"], ["added-me", "Added you", "userPlus"]] as [FriendFilter, string, IconName][]).map(([id, label, icon]) => (
+            <button key={id} type="button" className="pill" aria-pressed={friendFilter === id} onClick={() => { setFriendFilter(id); if (id !== "any") setLane("all"); }}>
+              <Icon name={icon} />{label}{doc && id !== "any" ? <span className="count">{friendCounts[id]}</span> : null}
+            </button>
+          ))}
+        </div>
+        {newBacks.length ? (
+          <div className="addback" role="status">
+            <Icon name="userCheck" />
+            <span className="addback-text">Added you back:</span>
+            {newBacks.map((c) => (
+              <button key={c.id} type="button" className="addback-name" onClick={() => { setOpen(c.id); setLane("all"); }}>{c.name}<span className="ago">{ago(c.addedBackAt)}</span></button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="layout" data-open={Boolean(current)}>
           <section aria-label="Chats">
@@ -233,7 +264,7 @@ export default function SnapQueue(_: Props) {
                   <li key={c.id}>
                     <button type="button" className="row" aria-current={open === c.id} data-unread={c.unread} onClick={() => setOpen(open === c.id ? "" : c.id)}>
                       <span className="who">
-                        <span className="name">{c.pinned ? <Icon name="pin" label="Pinned" /> : null}<span className="txt">{c.name}</span></span>
+                        <span className="name">{c.pinned ? <Icon name="pin" label="Pinned" /> : null}<span className="txt">{c.name}</span><FriendMark f={c.friend || ""} isNew={isNewAddBack(c)} /></span>
                         <span className="next">{c.nextStep ? <Icon name="arrow" /> : <Icon name="flag" />}<span className="txt">{c.nextStep || stageLabel(c.stage)}</span></span>
                       </span>
                       <span className="chatstate">
@@ -283,7 +314,24 @@ function ChatIcon({ c }: { c: Contact }) {
   return <Icon name={name} filled={c.chat.who === "them" && (c.unread || c.chat.state === "new" || c.chat.state === "received")} />;
 }
 
+function FriendMark({ f, isNew }: { f: Friend; isNew: boolean }) {
+  if (!f) return null;
+  if (f === "mutual") return isNew ? <span className="fmark" data-f="new"><Icon name="userCheck" /><span className="fm-txt">Added you back</span></span> : <span className="fmark" data-f="mutual"><Icon name="userCheck" label="Friends both ways" /></span>;
+  if (f === "pending") return <span className="fmark" data-f="pending"><Icon name="userClock" /><span className="fm-txt">Pending</span></span>;
+  return <span className="fmark" data-f="added-me"><Icon name="userPlus" /><span className="fm-txt">Added you</span></span>;
+}
+
+function friendHistory(next: Friend, prev: Friend) {
+  if (next === "mutual" && prev === "pending") return "Added you back";
+  if (next === "mutual") return "Friend status: friends";
+  if (next === "pending") return "Pending: hasn't added you back";
+  return "Added you";
+}
+
 function historyIcon(text: string): IconName {
+  if (text.startsWith("Added you back") || text.startsWith("Friend")) return "userCheck";
+  if (text.startsWith("Pending")) return "userClock";
+  if (text.startsWith("Added you")) return "userPlus";
   if (text.startsWith("Stage:")) return "flag";
   if (text.startsWith("Snap Boy")) return "sparkle";
   if (text.startsWith("Found")) return "search";
@@ -328,7 +376,7 @@ function Skeleton() {
 }
 
 function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
-  c: Contact; busy: boolean; onClose: () => void; onPatch: (b: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned">>) => Promise<boolean>;
+  c: Contact; busy: boolean; onClose: () => void; onPatch: (b: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned" | "friend">>) => Promise<boolean>;
   onDrafts: (goal: string) => void; onRemove: () => void; onCopied: () => void;
 }) {
   const [note, setNote] = useState(c.note);
@@ -375,6 +423,21 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
           ))}
         </div>
         {stopped ? <p className="hint">Stopped means clear disinterest: no drafts, no follow-ups.</p> : null}
+      </div>
+
+      <div className="section">
+        <h3><Icon name="user" />Friends on Snapchat</h3>
+        <div className="ladder" role="group" aria-label="Friend status">
+          {FRIENDS.map((f) => (
+            <button key={f.id} type="button" className="pill" aria-pressed={c.friend === f.id} onClick={() => onPatch({ friend: f.id })}>
+              <Icon name={f.id === "mutual" ? "userCheck" : f.id === "pending" ? "userClock" : "userPlus"} />{f.id === "mutual" ? "Friends both ways" : f.id === "pending" ? "Pending, not added back" : "Added you"}
+            </button>
+          ))}
+        </div>
+        <p className="hint">
+          {c.addedBackAt && c.friend === "mutual" ? `Added you back ${ago(c.addedBackAt)}.` : c.friend === "pending" ? "You added them. Sync shows it here when they add you back." : c.friend === "added-me" ? "They added you. Add them back in Snapchat if you want to." : c.friend === "mutual" ? "You're friends both ways." : "Not checked yet. Sync fills this in, or set it."}
+          {c.friendCheckedAt ? ` Checked ${ago(c.friendCheckedAt)}.` : ""}
+        </p>
       </div>
 
       <div className="section">

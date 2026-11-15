@@ -8,6 +8,7 @@ const JSON_HEADERS = { "content-type": "application/json" };
 const STAGES = ["new", "opened", "replied", "rapport", "number", "date-planned", "date-done", "paused", "stopped"];
 const CHAT_KINDS = ["chat", "snap", "call", "story", ""];
 const CHAT_STATES = ["new", "received", "opened", "delivered", "sent", "screenshot", "replayed", "typing", ""];
+const FRIEND = ["mutual", "pending", "added-me", ""];
 const DOC = "data/contacts.json";
 
 function cors(env, res) {
@@ -70,7 +71,7 @@ function newContact(name, source) {
   return {
     id: crypto.randomUUID().slice(0, 12), name: str(name, 80), username: "", stage: "new", source,
     chat: { who: "", kind: "", state: "", label: "", ago: "" }, unread: false, streak: null, lastAt: null,
-    note: "", nextStep: "", pinned: false, drafts: { state: "none", items: [], read: "", at: null, goal: "" },
+    note: "", nextStep: "", pinned: false, friend: "", addedBackAt: null, friendCheckedAt: null, drafts: { state: "none", items: [], read: "", at: null, goal: "" },
     history: [{ at: t, text: source === "sync" ? "Found in Snapchat" : "Added by hand" }], createdAt: t, updatedAt: t,
   };
 }
@@ -105,9 +106,22 @@ function cleanChat(c) {
     ago: str(c.ago, 20),
   };
 }
+// friend status: mutual = you're friends both ways, pending = you added them and they haven't added you back,
+// added-me = they added you and you haven't added them back. pending -> mutual stamps addedBackAt.
+function setFriend(c, next, source) {
+  if (!FRIEND.includes(next) || next === "" || next === (c.friend || "")) return false;
+  const prev = c.friend || "";
+  c.friend = next;
+  if (next === "mutual" && prev === "pending") { c.addedBackAt = nowIso(); addHistory(c, "Added you back"); }
+  else if (next === "mutual") addHistory(c, source === "user" ? "Friend status: friends" : "Friends both ways");
+  else if (next === "pending") addHistory(c, "Pending: hasn't added you back");
+  else if (next === "added-me") addHistory(c, "Added you");
+  return true;
+}
 function mergeSync(doc, rows) {
   const byName = new Map(doc.contacts.map((c) => [norm(c.name), c]));
   let added = 0, changed = 0;
+  const addedBack = [];
   for (const r of rows.slice(0, 300)) {
     const name = str(r && r.name, 80);
     if (!name) continue;
@@ -127,9 +141,14 @@ function mergeSync(doc, rows) {
     c.streak = Number.isFinite(Number(r.streak)) && r.streak !== null && r.streak !== "" ? Math.max(0, Math.min(9999, Math.round(Number(r.streak)))) : null;
     if (r.lastAt && !Number.isNaN(Date.parse(r.lastAt))) c.lastAt = new Date(r.lastAt).toISOString();
     if (r.username) c.username = str(r.username, 40);
+    if (r.friend !== undefined) {
+      const was = c.friend || "";
+      if (setFriend(c, r.friend, "sync")) { changed++; if (was === "pending" && c.friend === "mutual") addedBack.push(c.name); }
+      if (FRIEND.includes(r.friend) && r.friend) c.friendCheckedAt = nowIso();
+    }
     c.updatedAt = nowIso();
   }
-  return { added, changed };
+  return { added, changed, addedBack };
 }
 
 export default {
@@ -198,7 +217,7 @@ async function route(request, env) {
     }
     if (!Array.isArray(body.contacts)) return err("contacts array required");
     const r = mergeSync(doc, body.contacts);
-    doc.sync = { state: "done", requestedAt: doc.sync.requestedAt || null, finishedAt: nowIso(), seen: body.contacts.length, added: r.added, changed: r.changed, error: "" };
+    doc.sync = { state: "done", requestedAt: doc.sync.requestedAt || null, finishedAt: nowIso(), seen: body.contacts.length, added: r.added, changed: r.changed, addedBack: r.addedBack, error: "" };
     await writeDoc(env, doc);
     return json({ ok: true, sync: doc.sync });
   }
@@ -279,6 +298,7 @@ async function route(request, env) {
       if (body.note !== undefined) c.note = str(body.note, 1000);
       if (body.nextStep !== undefined) c.nextStep = str(body.nextStep, 200);
       if (body.pinned !== undefined) c.pinned = Boolean(body.pinned);
+      if (body.friend !== undefined) setFriend(c, body.friend, "user");
       if (body.name !== undefined && str(body.name, 80)) c.name = str(body.name, 80);
       c.updatedAt = nowIso();
       await writeDoc(env, doc);
