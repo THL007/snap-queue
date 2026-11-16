@@ -35,11 +35,18 @@ Snapchat has no API for personal chats, so there is no direct Snapchat webhook: 
 - **Stage** (you set it, sync moves `opened` to `replied` when they answer): new, opened, replied, rapport, number, date planned, date done, paused, stopped. Stopped = clear disinterest: no drafts.
 - **Chat state** (from sync): who sent last, chat or snap, the label Snapchat shows (New Chat, Received, Opened, Delivered...), time, streak.
 
+## Messages
+
+Each contact keeps the last 40 messages Snap Boy read (oldest first; text exactly as shown, snaps recorded but never opened). They show as a thread at the top of the contact page, and the newest one is the second line of the row (`You:` for yours).
+- **Sync** opens chats that show *New Chat* (up to 15 a run) when *Read new chats during Sync* is on in Settings (on by default). They'll show as Opened to the other person.
+- **Load messages / Refresh messages** on a contact opens just that chat (`snap.messages.requested`).
+- **Get drafts** also stores the messages it read.
+
 ## Who added you back
 
 Each contact has a friend status: **Friends both ways**, **Pending** (you added them, they haven't added you back) or **Added you** (they added you). Sync fills it from what Snapchat Web shows (a Pending label, normal delivery, the Added Me list read without accepting); you can set it by hand on the contact page. When someone goes from Pending to Friends, the app stamps `addedBackAt`, shows them in the green *Added you back* banner for 7 days, marks the row and logs it in the history. The friend filter (Anyone, Added you back, Pending, Added you) sits under the lanes and lives in the URL (`?f=back|pending|added-me`).
 
-Stored per contact: display name, those statuses, your next step and notes, the last drafts and a short history. No message text is stored, only Snap Boy's drafts and a one-line read of the other person's energy.
+Stored per contact: display name, those statuses, your next step and notes, the last drafts and a short history. Message text is stored too (see Messages), on Cloudflare behind your token.
 
 ## API
 
@@ -53,8 +60,10 @@ Stored per contact: display name, those statuses, your next step and notes, the 
 | `POST /api/contacts` | user | `{name, stage}` |
 | `PATCH /api/contacts/:id` | user | `{stage?, note?, nextStep?, pinned?, name?, friend?}` |
 | `DELETE /api/contacts/:id`, `POST /api/contacts/restore` | user | remove, undo |
-| `POST /api/sync` | user | fires `snap.sync.requested` |
+| `POST /api/sync` | user | `{readNew}`, fires `snap.sync.requested` |
 | `POST /api/contacts/:id/drafts` | user | `{goal}`, fires `snap.drafts.requested` |
+| `POST /api/contacts/:id/messages` | user | fires `snap.messages.requested` |
+| `PUT /api/agent/messages/:id` | agent | `{messages:[{from, kind, text, atText}], unread?, chat?}` or `{ok:false, error}` |
 | `PUT /api/agent/sync` | agent | `{contacts:[{name, unread, streak, friend?, chat:{who, kind, state, label, ago}}]}`; result has `addedBack` names or `{ok:false, error}` |
 | `PUT /api/agent/drafts/:id` | agent | `{read, drafts:[{text, angle, pick}], chat?}` or `{ok:false, error}` |
 | `POST /api/agent/claim` | once | sets the agent token; closed after |

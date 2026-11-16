@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ago, api, ApiError, chatTone, Contact, Doc, getSettings, Lane, LANES, laneOf, saveSettings, Settings, sortQueue, Stage, STAGES, stageLabel, Status,
 } from "../lib/api";
-import { FRIENDS, Friend, FriendFilter, friendMatch, isNewAddBack } from "../lib/api";
+import { FRIENDS, Friend, FriendFilter, friendMatch, isNewAddBack, lastMessage, Message, messageText } from "../lib/api";
 import { demoDoc } from "../lib/demo";
 import { Icon, IconName } from "./Icon";
 
@@ -120,6 +120,17 @@ export default function SnapQueue(_: Props) {
       if (!r.ok) setToast({ text: `Snap Boy wasn't reached: ${r.sync.error || "webhook failed"}.` });
     } catch (e) {
       setToast({ text: e instanceof Error ? e.message : "Sync failed." });
+    } finally { setBusy(""); }
+  }
+  async function requestMessages(c: Contact) {
+    if (demo) { setToast({ text: "Example mode: loading messages is off." }); return; }
+    setBusy(`msgs-${c.id}`);
+    try {
+      const r = await api.messages(settings, c.id);
+      replace(r.contact);
+      if (!r.ok) setToast({ text: "Snap Boy wasn't reached. Try again." });
+    } catch (e) {
+      setToast({ text: e instanceof Error ? e.message : "Couldn't ask for messages." });
     } finally { setBusy(""); }
   }
   async function requestDrafts(c: Contact, goal: string) {
@@ -265,7 +276,7 @@ export default function SnapQueue(_: Props) {
                     <button type="button" className="row" aria-current={open === c.id} data-unread={c.unread} onClick={() => setOpen(open === c.id ? "" : c.id)}>
                       <span className="who">
                         <span className="name">{c.pinned ? <Icon name="pin" label="Pinned" /> : null}<span className="txt">{c.name}</span><FriendMark f={c.friend || ""} isNew={isNewAddBack(c)} /></span>
-                        <span className="next">{c.nextStep ? <Icon name="arrow" /> : <Icon name="flag" />}<span className="txt">{c.nextStep || stageLabel(c.stage)}</span></span>
+                        <RowLine c={c} />
                       </span>
                       <span className="chatstate">
                         <span className="chip" data-tone={chatTone(c)}><ChatIcon c={c} />{chatText(c)}</span>
@@ -281,7 +292,7 @@ export default function SnapQueue(_: Props) {
           </section>
 
           {current ? (
-            <Detail key={current.id} c={current} busy={busy === `drafts-${current.id}`} onClose={() => setOpen("")} onPatch={(b) => patch(current, b)} onDrafts={(g) => requestDrafts(current, g)} onRemove={() => remove(current)} onCopied={() => setToast({ text: "Copied. Paste it in Snapchat." })} />
+            <Detail key={current.id} c={current} busy={busy === `drafts-${current.id}`} onClose={() => setOpen("")} onPatch={(b) => patch(current, b)} onDrafts={(g) => requestDrafts(current, g)} onMessages={() => requestMessages(current)} msgBusy={busy === `msgs-${current.id}`} onRemove={() => remove(current)} onCopied={() => setToast({ text: "Copied. Paste it in Snapchat." })} />
           ) : null}
         </div>
       </main>
@@ -312,6 +323,55 @@ function ChatIcon({ c }: { c: Contact }) {
   if (c.chat.who === "me") return <Icon name="send" />;
   const name: IconName = c.chat.kind === "snap" ? "snap" : c.chat.kind === "call" ? "call" : "chat";
   return <Icon name={name} filled={c.chat.who === "them" && (c.unread || c.chat.state === "new" || c.chat.state === "received")} />;
+}
+
+function RowLine({ c }: { c: Contact }) {
+  const m = lastMessage(c);
+  if (m) {
+    return (
+      <span className="next" data-from={m.from}>
+        {m.from === "me" ? <Icon name="send" /> : <Icon name={m.kind === "snap" ? "snap" : "chat"} />}
+        <span className="txt">{m.from === "me" ? "You: " : ""}{messageText(m)}</span>
+      </span>
+    );
+  }
+  return <span className="next">{c.nextStep ? <Icon name="arrow" /> : <Icon name="flag" />}<span className="txt">{c.nextStep || stageLabel(c.stage)}</span></span>;
+}
+
+function Messages({ c, busy, onLoad }: { c: Contact; busy: boolean; onLoad: () => void }) {
+  const list = c.messages || [];
+  const st = c.msgs?.state || "none";
+  const threadRef = useRef<HTMLOListElement>(null);
+  useEffect(() => { const el = threadRef.current; if (el) el.scrollTop = el.scrollHeight; }, [list.length]);
+  const working = busy || st === "requested";
+  return (
+    <div className="section">
+      <h3><Icon name="chat" />Messages</h3>
+      {list.length ? (
+        <ol ref={threadRef} className="thread" aria-label={`Messages with ${c.name}`}>
+          {list.map((m: Message, i) => (
+            <li key={i} className="bubble" data-from={m.from} data-kind={m.kind}>
+              {m.kind !== "chat" && m.kind !== "" ? <Icon name={m.kind === "snap" ? "snap" : m.kind === "call" ? "call" : "chat"} filled={m.kind === "snap"} /> : null}
+              <span className="bubble-text">{messageText(m)}</span>
+              {m.atText || m.at ? <time className="bubble-time" dateTime={m.at || undefined}>{m.atText || ago(m.at)}</time> : null}
+            </li>
+          ))}
+        </ol>
+      ) : st === "requested" ? (
+        <p className="hint"><Icon name="sync" />Snap Boy is opening the chat.</p>
+      ) : (
+        <p className="hint">No messages loaded yet. Sync loads new chats, or load this one now.</p>
+      )}
+      {st === "failed" ? <p className="hint hint--error" role="alert"><Icon name="alert" />Couldn't load: {c.msgs?.error || "no reason given"}</p> : null}
+      <div className="row-actions">
+        <button className="btn" type="button" onClick={onLoad} disabled={working} aria-busy={working}>
+          <span className="spin" data-on={working}><Icon name="sync" /></span>{working ? "Loading messages" : list.length ? "Refresh messages" : "Load messages"}
+        </button>
+        {c.msgs?.at && st === "ready" ? <span className="hint">Read {ago(c.msgs.at)}</span> : null}
+      </div>
+      <p className="hint">Opening a chat in Snapchat Web marks it as Opened for them. Snaps are never opened.</p>
+    </div>
+  );
 }
 
 function FriendMark({ f, isNew }: { f: Friend; isNew: boolean }) {
@@ -354,7 +414,7 @@ function SyncLine({ doc }: { doc: Doc | null }) {
   let text = "Not synced yet";
   if (s.state === "requested") text = "Snap Boy is reading your chat list";
   else if (s.state === "failed") text = `Sync failed: ${s.error || "unknown"}`;
-  else if (s.state === "done") text = `Synced ${ago(s.finishedAt)}, ${s.seen ?? 0} chats`;
+  else if (s.state === "done") text = `Synced ${ago(s.finishedAt)}, ${s.seen ?? 0} chats${s.read ? `, ${s.read} read` : ""}`;
   return <span className="syncline" data-state={s.state} role="status">{text}</span>;
 }
 
@@ -375,9 +435,9 @@ function Skeleton() {
   );
 }
 
-function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
+function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRemove, onCopied }: {
   c: Contact; busy: boolean; onClose: () => void; onPatch: (b: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned" | "friend">>) => Promise<boolean>;
-  onDrafts: (goal: string) => void; onRemove: () => void; onCopied: () => void;
+  onDrafts: (goal: string) => void; onMessages: () => void; msgBusy: boolean; onRemove: () => void; onCopied: () => void;
 }) {
   const [note, setNote] = useState(c.note);
   const [nextStep, setNextStep] = useState(c.nextStep);
@@ -414,6 +474,8 @@ function Detail({ c, busy, onClose, onPatch, onDrafts, onRemove, onCopied }: {
         </div>
         <button className="btn btn--quiet btn--icon" type="button" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
       </div>
+
+      <Messages c={c} busy={msgBusy} onLoad={onMessages} />
 
       <div className="section">
         <h3><Icon name="flag" />Status</h3>
@@ -559,6 +621,7 @@ function SettingsForm({ settings, status, first, demo, onSaved, onSignOut }: {
   const [apiUrl, setApiUrl] = useState(settings.api);
   const [token, setToken] = useState(settings.token);
   const [secret, setSecret] = useState("");
+  const [readNew, setReadNew] = useState(settings.readNew !== false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const firstRun = status ? !status.appTokenSet : false;
@@ -568,7 +631,7 @@ function SettingsForm({ settings, status, first, demo, onSaved, onSignOut }: {
     e.preventDefault();
     setError("");
     const t = token.trim();
-    const s = { api: apiUrl.trim() || settings.api, token: t };
+    const s = { api: apiUrl.trim() || settings.api, token: t, readNew };
     setBusy(true);
     try {
       if (firstRun) {
@@ -603,6 +666,12 @@ function SettingsForm({ settings, status, first, demo, onSaved, onSignOut }: {
             <input id="secret" className="input" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />
             <span className="hint">From OpenBot, Routines, "Snap Queue: sync chats and draft replies". It links Sync to Snap Boy.</span>
           </div>
+        ) : null}
+        {!first ? (
+          <label className="check">
+            <input type="checkbox" checked={readNew} onChange={(e) => setReadNew(e.target.checked)} />
+            <span><Icon name="chat" />Read new chats during Sync<span className="hint">Snap Boy opens chats with new messages so you see them here. They'll show as Opened. Snaps stay unopened.</span></span>
+          </label>
         ) : null}
         <details>
           <summary className="hint">API address</summary>

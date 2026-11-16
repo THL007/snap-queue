@@ -71,7 +71,7 @@ function newContact(name, source) {
   return {
     id: crypto.randomUUID().slice(0, 12), name: str(name, 80), username: "", stage: "new", source,
     chat: { who: "", kind: "", state: "", label: "", ago: "" }, unread: false, streak: null, lastAt: null,
-    note: "", nextStep: "", pinned: false, friend: "", addedBackAt: null, friendCheckedAt: null, drafts: { state: "none", items: [], read: "", at: null, goal: "" },
+    note: "", nextStep: "", pinned: false, friend: "", addedBackAt: null, friendCheckedAt: null, messages: [], msgs: { state: "none", at: null, error: "" }, drafts: { state: "none", items: [], read: "", at: null, goal: "" },
     history: [{ at: t, text: source === "sync" ? "Found in Snapchat" : "Added by hand" }], createdAt: t, updatedAt: t,
   };
 }
@@ -118,10 +118,27 @@ function setFriend(c, next, source) {
   else if (next === "added-me") addHistory(c, "Added you");
   return true;
 }
+// messages Snap Boy read in Snapchat Web: oldest first, the last 40 kept. Snaps are never opened, so a snap has no text.
+const MSG_KINDS = ["chat", "snap", "call", "media", "sticker", "voice", ""];
+function cleanMessages(list) {
+  return (Array.isArray(list) ? list : []).slice(-40).map((x) => {
+    x = x && typeof x === "object" ? x : {};
+    const at = x.at && !Number.isNaN(Date.parse(x.at)) ? new Date(x.at).toISOString() : null;
+    return { from: pick(x.from, ["them", "me"], "them"), kind: pick(x.kind, MSG_KINDS, "chat"), text: str(x.text, 1000), at, atText: str(x.atText, 30) };
+  }).filter((x) => x.text || x.kind !== "chat");
+}
+function setMessages(c, list) {
+  const msgs = cleanMessages(list);
+  if (!msgs.length) return false;
+  c.messages = msgs;
+  c.msgs = { state: "ready", at: nowIso(), error: "" };
+  return true;
+}
 function mergeSync(doc, rows) {
   const byName = new Map(doc.contacts.map((c) => [norm(c.name), c]));
   let added = 0, changed = 0;
   const addedBack = [];
+  let read = 0;
   for (const r of rows.slice(0, 300)) {
     const name = str(r && r.name, 80);
     if (!name) continue;
@@ -141,6 +158,7 @@ function mergeSync(doc, rows) {
     c.streak = Number.isFinite(Number(r.streak)) && r.streak !== null && r.streak !== "" ? Math.max(0, Math.min(9999, Math.round(Number(r.streak)))) : null;
     if (r.lastAt && !Number.isNaN(Date.parse(r.lastAt))) c.lastAt = new Date(r.lastAt).toISOString();
     if (r.username) c.username = str(r.username, 40);
+    if (r.messages && setMessages(c, r.messages)) read++;
     if (r.friend !== undefined) {
       const was = c.friend || "";
       if (setFriend(c, r.friend, "sync")) { changed++; if (was === "pending" && c.friend === "mutual") addedBack.push(c.name); }
@@ -148,7 +166,7 @@ function mergeSync(doc, rows) {
     }
     c.updatedAt = nowIso();
   }
-  return { added, changed, addedBack };
+  return { added, changed, addedBack, read };
 }
 
 export default {
@@ -217,7 +235,7 @@ async function route(request, env) {
     }
     if (!Array.isArray(body.contacts)) return err("contacts array required");
     const r = mergeSync(doc, body.contacts);
-    doc.sync = { state: "done", requestedAt: doc.sync.requestedAt || null, finishedAt: nowIso(), seen: body.contacts.length, added: r.added, changed: r.changed, addedBack: r.addedBack, error: "" };
+    doc.sync = { state: "done", requestedAt: doc.sync.requestedAt || null, finishedAt: nowIso(), seen: body.contacts.length, added: r.added, changed: r.changed, addedBack: r.addedBack, read: r.read, readNew: Boolean(doc.sync.readNew), error: "" };
     await writeDoc(env, doc);
     return json({ ok: true, sync: doc.sync });
   }
@@ -236,6 +254,24 @@ async function route(request, env) {
       c.drafts = { ...c.drafts, state: "ready", items, read: str(body.read, 300), at: nowIso() };
       addHistory(c, "Snap Boy drafted replies");
       if (body.chat) c.chat = cleanChat(body.chat);
+      if (body.messages) setMessages(c, body.messages);
+    }
+    c.updatedAt = nowIso();
+    await writeDoc(env, doc);
+    return json({ ok: true, contact: c });
+  }
+  const am = p.match(/^\/api\/agent\/messages\/([A-Za-z0-9-]{4,40})$/);
+  if (am && (m === "PUT" || m === "POST")) {
+    if (role !== "agent") return err("agent only", 403);
+    const body = await request.json().catch(() => ({}));
+    const doc = await readDoc(env);
+    const c = doc.contacts.find((x) => x.id === am[1]);
+    if (!c) return err("not found", 404);
+    if (body.ok === false) c.msgs = { state: "failed", at: nowIso(), error: str(body.error, 300) };
+    else {
+      if (!setMessages(c, body.messages)) return err("messages array required");
+      if (body.chat) c.chat = cleanChat(body.chat);
+      if (body.unread !== undefined) c.unread = Boolean(body.unread);
     }
     c.updatedAt = nowIso();
     await writeDoc(env, doc);
@@ -247,9 +283,11 @@ async function route(request, env) {
 
   if (p === "/api/sync" && m === "POST") {
     const doc = await readDoc(env);
+    const body = await request.json().catch(() => ({}));
+    const readNew = body.readNew !== false;
     const id = crypto.randomUUID().slice(0, 8);
-    const r = await fireEvent(env, "snap.sync.requested", { syncId: id, known: doc.contacts.map((c) => c.name) }, `sync-${id}`);
-    doc.sync = { ...doc.sync, state: r.sent ? "requested" : "failed", requestedAt: nowIso(), error: r.sent ? "" : `webhook ${r.reason || r.status}` };
+    const r = await fireEvent(env, "snap.sync.requested", { syncId: id, readNew, known: doc.contacts.map((c) => c.name) }, `sync-${id}`);
+    doc.sync = { ...doc.sync, readNew, state: r.sent ? "requested" : "failed", requestedAt: nowIso(), error: r.sent ? "" : `webhook ${r.reason || r.status}` };
     await writeDoc(env, doc);
     return json({ ok: r.sent, sync: doc.sync }, r.sent ? 200 : 502);
   }
@@ -276,13 +314,20 @@ async function route(request, env) {
     await writeDoc(env, doc);
     return json({ ok: true });
   }
-  const cm = p.match(/^\/api\/contacts\/([A-Za-z0-9-]{4,40})(\/drafts)?$/);
+  const cm = p.match(/^\/api\/contacts\/([A-Za-z0-9-]{4,40})(\/drafts|\/messages)?$/);
   if (cm) {
     const doc = await readDoc(env);
     const i = doc.contacts.findIndex((x) => x.id === cm[1]);
     if (i < 0) return err("not found", 404);
     const c = doc.contacts[i];
-    if (cm[2] && m === "POST") {
+    if (cm[2] === "/messages" && m === "POST") {
+      const r = await fireEvent(env, "snap.messages.requested", { contactId: c.id, name: c.name }, `messages-${c.id}`);
+      c.msgs = { state: r.sent ? "requested" : "failed", at: nowIso(), error: r.sent ? "" : `webhook ${r.reason || r.status}` };
+      c.updatedAt = nowIso();
+      await writeDoc(env, doc);
+      return json({ ok: r.sent, contact: c }, r.sent ? 200 : 502);
+    }
+    if (cm[2] === "/drafts" && m === "POST") {
       if (c.stage === "stopped") return err("stopped: no drafts after clear disinterest", 409);
       const body = await request.json().catch(() => ({}));
       const goal = str(body.goal, 200);

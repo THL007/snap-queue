@@ -30,6 +30,14 @@ export function friendMatch(c: { friend?: Friend; addedBackAt?: string | null },
   return (c.friend || "") === f;
 }
 
+/** A message Snap Boy read in Snapchat Web, oldest first. Snaps are never opened, so they carry no text. */
+export type Message = { from: "them" | "me"; kind: "chat" | "snap" | "call" | "media" | "sticker" | "voice" | ""; text: string; at: string | null; atText: string };
+export const lastMessage = (c: { messages?: Message[] }) => (c.messages && c.messages.length ? c.messages[c.messages.length - 1] : null);
+export function messageText(m: Message) {
+  if (m.text) return m.text;
+  return m.kind === "snap" ? "Snap" : m.kind === "call" ? "Call" : m.kind === "voice" ? "Voice note" : m.kind === "sticker" ? "Sticker" : m.kind === "media" ? "Photo or video" : "Message";
+}
+
 export type Chat = { who: "them" | "me" | ""; kind: "chat" | "snap" | "call" | "story" | ""; state: string; label: string; ago: string };
 export type Draft = { text: string; angle: string; pick: boolean };
 export type Contact = {
@@ -38,18 +46,19 @@ export type Contact = {
   note: string; nextStep: string; pinned: boolean;
   friend?: Friend; addedBackAt?: string | null; friendCheckedAt?: string | null;
   drafts: { state: "none" | "requested" | "ready" | "failed"; items: Draft[]; read: string; at: string | null; goal: string };
+  messages?: Message[]; msgs?: { state: "none" | "requested" | "ready" | "failed"; at: string | null; error: string };
   history: { at: string; text: string }[]; createdAt: string; updatedAt: string;
 };
-export type Sync = { state: "never" | "requested" | "done" | "failed"; requestedAt?: string | null; finishedAt?: string; seen?: number; added?: number; changed?: number; addedBack?: string[]; error?: string };
+export type Sync = { state: "never" | "requested" | "done" | "failed"; requestedAt?: string | null; finishedAt?: string; seen?: number; added?: number; changed?: number; addedBack?: string[]; read?: number; readNew?: boolean; error?: string };
 export type Doc = { contacts: Contact[]; sync: Sync };
 export type Status = { ready: boolean; appTokenSet: boolean; webhook: boolean; agent: boolean };
 
-export type Settings = { api: string; token: string };
+export type Settings = { api: string; token: string; readNew?: boolean };
 const KEY = "snap-queue-settings";
 export function getSettings(): Settings {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || "{}");
-    return { api: s.api || DEFAULT_API, token: s.token || "" };
+    return { api: s.api || DEFAULT_API, token: s.token || "", readNew: s.readNew !== false };
   } catch {
     return { api: DEFAULT_API, token: "" };
   }
@@ -81,7 +90,8 @@ export const api = {
   status: (s: Settings) => req<Status>(s, "GET", "/api/status"),
   setup: (s: Settings, body: { appToken?: string; webhookSecret?: string }, token?: string) => req<{ ok: boolean; webhook: boolean }>(s, "POST", "/api/setup", body, token ?? s.token),
   list: (s: Settings) => req<Doc>(s, "GET", "/api/contacts"),
-  sync: (s: Settings) => req<{ ok: boolean; sync: Sync }>(s, "POST", "/api/sync"),
+  sync: (s: Settings) => req<{ ok: boolean; sync: Sync }>(s, "POST", "/api/sync", { readNew: s.readNew !== false }),
+  messages: (s: Settings, id: string) => req<{ ok: boolean; contact: Contact }>(s, "POST", `/api/contacts/${id}/messages`),
   add: (s: Settings, name: string, stage: Stage) => req<{ contact: Contact }>(s, "POST", "/api/contacts", { name, stage }),
   patch: (s: Settings, id: string, body: Partial<Pick<Contact, "stage" | "note" | "nextStep" | "pinned" | "name" | "friend">>) => req<{ contact: Contact }>(s, "PATCH", `/api/contacts/${id}`, body),
   remove: (s: Settings, id: string) => req<{ ok: boolean; removed: Contact }>(s, "DELETE", `/api/contacts/${id}`),

@@ -1,5 +1,6 @@
 // Snap Boy's side of the link: write what it read in Snapchat Web back to the Snap Queue API.
-// Usage: node worker/agent.mjs sync <file.json> | drafts <contactId> <file.json>
+// Usage: node worker/agent.mjs sync <file.json> | drafts <contactId> <file.json> | messages <contactId> <file.json>
+//        | fail-messages <contactId> "<reason>"
 //        | fail-sync "<reason>" | fail-drafts <contactId> "<reason>" | list
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,8 +25,10 @@ const readJson = (f) => JSON.parse(readFileSync(f, "utf8"));
 let out;
 if (cmd === "sync") out = await call("PUT", "/api/agent/sync", readJson(a));
 else if (cmd === "drafts") out = await call("PUT", `/api/agent/drafts/${a}`, readJson(b));
+else if (cmd === "messages") out = await call("PUT", `/api/agent/messages/${a}`, readJson(b));
+else if (cmd === "fail-messages") out = await call("PUT", `/api/agent/messages/${a}`, { ok: false, error: b || "failed" });
 else if (cmd === "fail-sync") out = await call("PUT", "/api/agent/sync", { ok: false, error: a || "failed" });
 else if (cmd === "fail-drafts") out = await call("PUT", `/api/agent/drafts/${a}`, { ok: false, error: b || "failed" });
-else if (cmd === "list") { const d = await call("GET", "/api/contacts"); out = { sync: d.sync, contacts: d.contacts.map((c) => ({ id: c.id, name: c.name, stage: c.stage, friend: c.friend || "", chat: c.chat.label })) }; }
-else { console.error("usage: sync <file> | drafts <id> <file> | fail-sync <reason> | fail-drafts <id> <reason> | list"); process.exit(2); }
+else if (cmd === "list") { const d = await call("GET", "/api/contacts"); out = { sync: d.sync, contacts: d.contacts.map((c) => ({ id: c.id, name: c.name, stage: c.stage, friend: c.friend || "", chat: c.chat.label, messages: (c.messages || []).length })) }; }
+else { console.error("usage: sync <file> | drafts <id> <file> | messages <id> <file> | fail-messages <id> <reason> | fail-sync <reason> | fail-drafts <id> <reason> | list"); process.exit(2); }
 console.log(JSON.stringify(out, null, 2));
