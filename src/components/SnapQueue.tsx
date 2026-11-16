@@ -49,6 +49,13 @@ export default function SnapQueue(_: Props) {
   const [busy, setBusy] = useState("");
 
   useEffect(() => writeUrl(lane, open, demo, friendFilter), [lane, open, demo, friendFilter]);
+  // one-line rows: mark the ones that really scroll, so only they get the edge fade
+  useEffect(() => {
+    const mark = () => document.querySelectorAll<HTMLElement>(".scroller").forEach((el) => { el.dataset.more = String(el.scrollWidth > el.clientWidth + 1); });
+    mark();
+    window.addEventListener("resize", mark);
+    return () => window.removeEventListener("resize", mark);
+  });
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), toast.undo ? 7000 : 3500);
@@ -216,7 +223,7 @@ export default function SnapQueue(_: Props) {
 
       <main className="main container">
         <div className="toolbar">
-          <div className="lanes" role="tablist" aria-label="Queue lanes">
+          <div className="lanes scroller" role="tablist" aria-label="Queue lanes">
             {LANES.map((l) => (
               <button key={l.id} role="tab" type="button" className="lane" aria-selected={lane === l.id} onClick={() => setLane(l.id)}>
                 <Icon name={LANE_ICON[l.id]} />{l.label} <span className="count">{doc ? counts[l.id] : ""}</span>
@@ -228,15 +235,15 @@ export default function SnapQueue(_: Props) {
             <input className="input" type="search" placeholder="Find a name or next step" aria-label="Find a name or next step" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
         </div>
-        <div className="friends" role="group" aria-label="Friend status">
+        <div className="friends scroller" role="group" aria-label="Friend status">
           {([["any", "Anyone", "user"], ["back", "Added you back", "userCheck"], ["pending", "Pending", "userClock"], ["added-me", "Added you", "userPlus"]] as [FriendFilter, string, IconName][]).map(([id, label, icon]) => (
             <button key={id} type="button" className="pill" aria-pressed={friendFilter === id} onClick={() => { setFriendFilter(id); if (id !== "any") setLane("all"); }}>
-              <Icon name={icon} />{label}{doc && id !== "any" ? <span className="count">{friendCounts[id]}</span> : null}
+              <Icon name={icon} /><span className="wide">{label}</span><span className="narrow">{id === "back" ? "Added back" : id === "any" ? "All" : label}</span>{doc && id !== "any" ? <span className="count">{friendCounts[id]}</span> : null}
             </button>
           ))}
         </div>
         {newBacks.length ? (
-          <div className="addback" role="status">
+          <div className="addback scroller" role="status">
             <Icon name="userCheck" />
             <span className="addback-text">Added you back:</span>
             {newBacks.map((c) => (
@@ -443,6 +450,13 @@ function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRe
   const [nextStep, setNextStep] = useState(c.nextStep);
   const [goal, setGoal] = useState(c.drafts.goal || "");
   const [saved, setSaved] = useState(false);
+  // phones fold next step and notes away; wider screens keep them open
+  const [foldOpen, setFoldOpen] = useState(() => typeof window === "undefined" || !window.matchMedia("(max-width: 40rem)").matches);
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = stageRef.current, on = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (row && on && row.scrollWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - row.clientWidth / 2 + on.offsetWidth / 2;
+  }, [c.stage]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const headRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => { headRef.current?.focus(); }, []);
@@ -479,7 +493,7 @@ function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRe
 
       <div className="section">
         <h3><Icon name="flag" />Status</h3>
-        <div className="ladder" role="group" aria-label="Stage">
+        <div className="ladder scroller" role="group" aria-label="Stage" ref={stageRef}>
           {STAGES.map((s) => (
             <button key={s.id} type="button" className="pill" data-stop={s.id === "stopped"} aria-pressed={c.stage === s.id} onClick={() => onPatch({ stage: s.id })}>{s.label}</button>
           ))}
@@ -489,10 +503,10 @@ function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRe
 
       <div className="section">
         <h3><Icon name="user" />Friends on Snapchat</h3>
-        <div className="ladder" role="group" aria-label="Friend status">
+        <div className="ladder scroller" role="group" aria-label="Friend status">
           {FRIENDS.map((f) => (
             <button key={f.id} type="button" className="pill" aria-pressed={c.friend === f.id} onClick={() => onPatch({ friend: f.id })}>
-              <Icon name={f.id === "mutual" ? "userCheck" : f.id === "pending" ? "userClock" : "userPlus"} />{f.id === "mutual" ? "Friends both ways" : f.id === "pending" ? "Pending, not added back" : "Added you"}
+              <Icon name={f.id === "mutual" ? "userCheck" : f.id === "pending" ? "userClock" : "userPlus"} /><span className="wide">{f.id === "mutual" ? "Friends both ways" : f.id === "pending" ? "Pending, not added back" : "Added you"}</span><span className="narrow">{f.id === "mutual" ? "Friends" : f.id === "pending" ? "Pending" : "Added you"}</span>
             </button>
           ))}
         </div>
@@ -502,6 +516,11 @@ function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRe
         </p>
       </div>
 
+      <details className="fold" open={foldOpen} onToggle={(e) => setFoldOpen((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>
+          <Icon name="pencil" /><span className="fold-title">Next step and notes</span>
+          {!foldOpen && (nextStep || note) ? <span className="fold-peek">{nextStep || note}</span> : null}
+        </summary>
       <div className="section">
         <div className="field">
           <label htmlFor="next"><Icon name="arrow" />Next step</label>
@@ -513,6 +532,7 @@ function Detail({ c, busy, msgBusy, onClose, onPatch, onDrafts, onMessages, onRe
         </div>
         <span className="saved" data-on={saved} aria-live="polite">{saved ? <><Icon name="check" />Saved</> : ""}</span>
       </div>
+      </details>
 
       <div className="section">
         <h3><Icon name="sparkle" />Reply drafts</h3>
